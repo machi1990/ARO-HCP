@@ -1,0 +1,397 @@
+{
+  "description": "Control plane upgrades selected (desired) but not yet started (no partial state).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["upgrade", "version"],
+      "targetBlank": true,
+      "title": "Upgrade fleet tracking",
+      "type": "dashboards"
+    }
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 400,
+      "title": "Pending upgrades (not started)",
+      "type": "row"
+    },
+    {
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 1 },
+      "id": 401,
+      "options": {
+        "content": "A cluster appears here when `state=\"desired\"` is set for a target z-stream and **no** matching `state=\"partial\"` exists yet — the upgrade has been selected but not started. Once the control plane enters Partial for that version, the cluster moves to the [Upgrade fleet tracking](d/backend-cluster-upgrade-versions) dashboard.",
+        "mode": "markdown"
+      },
+      "title": "Note",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Clusters with a desired target z-stream and no partial upgrade started for that version.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "orange", "value": 5 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 5 },
+      "id": 402,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:pending_upgrade_count{cluster=\"$cluster\"})",
+          "legendFormat": "Pending",
+          "refId": "A"
+        }
+      ],
+      "title": "Pending upgrade count",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Share of all tracked clusters waiting for an upgrade to start.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "orange", "value": 15 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 5 },
+      "id": 403,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:pending_upgrade_fleet_percentage{cluster=\"$cluster\"})",
+          "legendFormat": "Pending %",
+          "refId": "A"
+        }
+      ],
+      "title": "Fleet % waiting to start",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Pending upgrades that have remained in desired longer than the threshold without entering partial.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 5 },
+      "id": 404,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "count(max without(prometheus_replica) (backend_cluster_version_info{cluster=\"$cluster\", state=\"desired\"}) unless on(resource_id, subscription_id, version) max without(prometheus_replica) (backend_cluster_version_info{cluster=\"$cluster\", state=\"partial\"}) and on(resource_id, subscription_id, version) (max without(prometheus_replica) (backend_cluster_version:time_in_desired_seconds{cluster=\"$cluster\"}) > $pending_threshold_minutes * 60))",
+          "legendFormat": "Delayed start",
+          "refId": "A"
+        }
+      ],
+      "title": "Delayed start count (>${pending_threshold_minutes}m in desired)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Pending upgrades grouped by target z-stream version.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 6, "x": 18, "y": 5 },
+      "id": 405,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value"] },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:pending_upgrade_count_by_version{cluster=\"$cluster\"})",
+          "legendFormat": "{{version}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Pending upgrades by target z-stream",
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "All clusters with desired set and upgrade not yet started.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 11 },
+      "id": 406,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Seconds waiting" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:time_in_desired_seconds{cluster=\"$cluster\"}) and on(resource_id, subscription_id, version) max without(prometheus_replica) (backend_cluster_version_info{cluster=\"$cluster\", state=\"desired\"}) unless on(resource_id, subscription_id, version) max without(prometheus_replica) (backend_cluster_version_info{cluster=\"$cluster\", state=\"partial\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pending upgrades",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "state": true },
+            "renameByName": {
+              "Value": "Seconds waiting",
+              "resource_id": "Cluster",
+              "subscription_id": "Subscription",
+              "version": "Target z-stream"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Pending upgrades that have not entered partial within the threshold.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 11 },
+      "id": 407,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Seconds waiting" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:time_in_desired_seconds{cluster=\"$cluster\"}) > $pending_threshold_minutes * 60 and on(resource_id, subscription_id, version) max without(prometheus_replica) (backend_cluster_version_info{cluster=\"$cluster\", state=\"desired\"}) unless on(resource_id, subscription_id, version) max without(prometheus_replica) (backend_cluster_version_info{cluster=\"$cluster\", state=\"partial\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Delayed starts (>${pending_threshold_minutes}m in desired)",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true, "state": true },
+            "renameByName": {
+              "Value": "Seconds waiting",
+              "resource_id": "Cluster",
+              "subscription_id": "Subscription",
+              "version": "Target z-stream"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+      "id": 408,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:pending_upgrade_count{cluster=\"$cluster\"})",
+          "legendFormat": "Pending count",
+          "refId": "A"
+        }
+      ],
+      "title": "Pending upgrade count over time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      "id": 409,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:pending_upgrade_fleet_percentage{cluster=\"$cluster\"})",
+          "legendFormat": "Pending %",
+          "refId": "A"
+        }
+      ],
+      "title": "Fleet % waiting to start over time",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["backend", "upgrade", "version", "pending"],
+  "templating": {
+    "list": [
+      {
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "^Managed_Prometheus_services-.*$",
+        "type": "datasource"
+      },
+      {
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(up,cluster)",
+        "hide": 0,
+        "includeAll": false,
+        "label": "cluster",
+        "multi": false,
+        "name": "cluster",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(up,cluster)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "^.*-svc-\\d+$",
+        "type": "query"
+      },
+      {
+        "current": { "selected": true, "text": "30", "value": "30" },
+        "hide": 0,
+        "label": "Delayed start threshold (minutes)",
+        "name": "pending_threshold_minutes",
+        "options": [
+          { "selected": false, "text": "15", "value": "15" },
+          { "selected": true, "text": "30", "value": "30" },
+          { "selected": false, "text": "60", "value": "60" },
+          { "selected": false, "text": "120", "value": "120" }
+        ],
+        "query": "15,30,60,120",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Cluster Upgrade Pending (Not Started)",
+  "uid": "backend-cluster-upgrade-pending",
+  "version": 1
+}

@@ -1,0 +1,57 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backend-cluster-upgrade-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: backend-cluster-upgrade-alerts
+    interval: 1m
+    rules:
+    # SLO-based multi-window multi-burn rate alerts for desired -> active
+    # SLO: 99.99% of upgrades complete in ≤1800 seconds (30 minutes)
+    # Error budget: 0.01% (0.0001)
+
+    # Fast burn (14.4x): Alert when error rate > 0.144% in both 5m and 1h windows
+    - alert: ClusterUpgradeActivationLatency1h5m
+      expr: |
+        1 - (backend_cluster_upgrade:desired_to_active_success_sum_5m / backend_cluster_upgrade:desired_to_active_count_5m) > (14.4 * 0.0001)
+        and
+        backend_cluster_upgrade:desired_to_active_count_5m > 0
+        and
+        1 - (backend_cluster_upgrade:desired_to_active_success_sum_1h / backend_cluster_upgrade:desired_to_active_count_1h) > (14.4 * 0.0001)
+        and
+        backend_cluster_upgrade:desired_to_active_count_1h > 5
+      for: 2m
+      labels:
+        severity: warning
+        short_window: 5m
+        long_window: 1h
+      annotations:
+        summary: "Cluster upgrade activation latency SLO burn (fast)"
+        description: "Cluster {{ $labels.resource_id }} (subscription: {{ $labels.subscription_id }}) is experiencing high error budget burn for upgrade activation latency. Current error rate exceeds 0.144% in both 5m and 1h windows, burning through the 99.99% SLO (threshold: 30 minutes from desired to active)."
+        correlationId: "ClusterUpgradeActivationLatency1h5m/{{ $labels.subscription_id }}/{{ $labels.resource_id }}"
+        # TODO: write an upgrade-specific runbook and replace the backend-tsg placeholder URL below.
+        runbook_url: 'https://eng.ms/docs/cloud-ai-platform/azure-core/azure-cloud-native-and-management-platform/control-plane-bburns/azure-red-hat-openshift/azure-redhat-openshift-team-doc/hcp/troubleshooting/backend-tsg.html'
+
+    # Medium burn (6x): Alert when error rate > 0.06% in both 30m and 6h windows
+    - alert: ClusterUpgradeActivationLatency6h30m
+      expr: |
+        1 - (backend_cluster_upgrade:desired_to_active_success_sum_30m / backend_cluster_upgrade:desired_to_active_count_30m) > (6 * 0.0001)
+        and
+        backend_cluster_upgrade:desired_to_active_count_30m > 3
+        and
+        1 - (backend_cluster_upgrade:desired_to_active_success_sum_6h / backend_cluster_upgrade:desired_to_active_count_6h) > (6 * 0.0001)
+        and
+        backend_cluster_upgrade:desired_to_active_count_6h > 36
+      for: 15m
+      labels:
+        severity: warning
+        short_window: 30m
+        long_window: 6h
+      annotations:
+        summary: "Cluster upgrade activation latency SLO burn (medium)"
+        description: "Cluster {{ $labels.resource_id }} (subscription: {{ $labels.subscription_id }}) is experiencing sustained error budget burn for upgrade activation latency. Current error rate exceeds 0.06% in both 30m and 6h windows, burning through the 99.99% SLO (threshold: 30 minutes from desired to active)."
+        correlationId: "ClusterUpgradeActivationLatency6h30m/{{ $labels.subscription_id }}/{{ $labels.resource_id }}"
+        # TODO: write an upgrade-specific runbook and replace the backend-tsg placeholder URL below.
+        runbook_url: 'https://eng.ms/docs/cloud-ai-platform/azure-core/azure-cloud-native-and-management-platform/control-plane-bburns/azure-red-hat-openshift/azure-redhat-openshift-team-doc/hcp/troubleshooting/backend-tsg.html'

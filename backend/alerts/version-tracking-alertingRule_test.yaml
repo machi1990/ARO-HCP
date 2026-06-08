@@ -1,0 +1,101 @@
+rule_files:
+- version-tracking-alertingRule.yaml
+evaluation_interval: 1m
+tests:
+# Test: fast burn alert fires when error rate exceeds threshold in 5m and 1h windows
+- interval: 1m
+  input_series:
+  - series: 'backend_cluster_upgrade:desired_to_active_success_sum_5m{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "9+9x70"
+  - series: 'backend_cluster_upgrade:desired_to_active_count_5m{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x70"
+  - series: 'backend_cluster_upgrade:desired_to_active_success_sum_1h{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "9+9x70"
+  - series: 'backend_cluster_upgrade:desired_to_active_count_1h{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x70"
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: ClusterUpgradeActivationLatency1h5m
+    exp_alerts:
+    - exp_labels:
+        subscription_id: sub-1
+        resource_id: cluster-1
+        severity: warning
+        short_window: 5m
+        long_window: 1h
+      exp_annotations:
+        summary: "Cluster upgrade activation latency SLO burn (fast)"
+        description: "Cluster cluster-1 (subscription: sub-1) is experiencing high error budget burn for upgrade activation latency. Current error rate exceeds 0.144% in both 5m and 1h windows, burning through the 99.99% SLO (threshold: 30 minutes from desired to active)."
+        correlationId: "ClusterUpgradeActivationLatency1h5m/sub-1/cluster-1"
+        runbook_url: 'https://eng.ms/docs/cloud-ai-platform/azure-core/azure-cloud-native-and-management-platform/control-plane-bburns/azure-red-hat-openshift/azure-redhat-openshift-team-doc/hcp/troubleshooting/backend-tsg.html'
+# Test: fast burn alert does not fire when SLO is met
+- interval: 1m
+  input_series:
+  - series: 'backend_cluster_upgrade:desired_to_active_success_sum_5m{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x70"
+  - series: 'backend_cluster_upgrade:desired_to_active_count_5m{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x70"
+  - series: 'backend_cluster_upgrade:desired_to_active_success_sum_1h{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x70"
+  - series: 'backend_cluster_upgrade:desired_to_active_count_1h{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x70"
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: ClusterUpgradeActivationLatency1h5m
+    exp_alerts: []
+# Test: fast burn alert does not fire when only the 5m window exceeds threshold
+- interval: 1m
+  input_series:
+  - series: 'backend_cluster_upgrade:desired_to_active_success_sum_5m{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "0+0x70"
+  - series: 'backend_cluster_upgrade:desired_to_active_count_5m{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x70"
+  - series: 'backend_cluster_upgrade:desired_to_active_success_sum_1h{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x70"
+  - series: 'backend_cluster_upgrade:desired_to_active_count_1h{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x70"
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: ClusterUpgradeActivationLatency1h5m
+    exp_alerts: []
+# Test: medium burn alert fires when error rate exceeds threshold in 30m and 6h windows
+- interval: 1m
+  input_series:
+  - series: 'backend_cluster_upgrade:desired_to_active_success_sum_30m{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "9+9x420"
+  - series: 'backend_cluster_upgrade:desired_to_active_count_30m{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x420"
+  - series: 'backend_cluster_upgrade:desired_to_active_success_sum_6h{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "35+35x420"
+  - series: 'backend_cluster_upgrade:desired_to_active_count_6h{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "40+40x420"
+  alert_rule_test:
+  - eval_time: 17m
+    alertname: ClusterUpgradeActivationLatency6h30m
+    exp_alerts:
+    - exp_labels:
+        subscription_id: sub-1
+        resource_id: cluster-1
+        severity: warning
+        short_window: 30m
+        long_window: 6h
+      exp_annotations:
+        summary: "Cluster upgrade activation latency SLO burn (medium)"
+        description: "Cluster cluster-1 (subscription: sub-1) is experiencing sustained error budget burn for upgrade activation latency. Current error rate exceeds 0.06% in both 30m and 6h windows, burning through the 99.99% SLO (threshold: 30 minutes from desired to active)."
+        correlationId: "ClusterUpgradeActivationLatency6h30m/sub-1/cluster-1"
+        runbook_url: 'https://eng.ms/docs/cloud-ai-platform/azure-core/azure-cloud-native-and-management-platform/control-plane-bburns/azure-red-hat-openshift/azure-redhat-openshift-team-doc/hcp/troubleshooting/backend-tsg.html'
+# Test: medium burn alert does not fire when SLO is met
+- interval: 1m
+  input_series:
+  - series: 'backend_cluster_upgrade:desired_to_active_success_sum_30m{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x420"
+  - series: 'backend_cluster_upgrade:desired_to_active_count_30m{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "10+10x420"
+  - series: 'backend_cluster_upgrade:desired_to_active_success_sum_6h{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "40+40x420"
+  - series: 'backend_cluster_upgrade:desired_to_active_count_6h{subscription_id="sub-1", resource_id="cluster-1"}'
+    values: "40+40x420"
+  alert_rule_test:
+  - eval_time: 17m
+    alertname: ClusterUpgradeActivationLatency6h30m
+    exp_alerts: []

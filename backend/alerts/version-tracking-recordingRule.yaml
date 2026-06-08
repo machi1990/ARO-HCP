@@ -1,0 +1,178 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backend-cluster-upgrade-recording-rules
+  namespace: monitoring
+spec:
+  groups:
+  - name: backend-cluster-upgrade-recording-rules
+    interval: 1m
+    rules:
+    # Version state semantics (backend_cluster_version_info):
+    #   desired   — target z-stream selected, upgrade not started yet (pre-upgrade only)
+    #   partial   — upgrade in progress
+    #   completed — upgrade finished; use with partial for fleet and upgrade metrics
+    #
+    # Capture timestamps when versions first enter each state (earliest timestamp seen in last 28 days).
+    # This preserves the initial timestamp even as the metric continues to exist.
+    # Uses 28-day window to align with SLO tracking period.
+    - record: backend_cluster_version_state_timestamp_seconds
+      expr: |
+        min_over_time(
+          (timestamp(backend_cluster_version_info) * backend_cluster_version_info)[28d:1m]
+        )
+
+    # Duration from desired → partial (upgrade started). Requires both timestamps; desired-only clusters are excluded.
+    - record: backend_cluster_upgrade:desired_to_active_seconds
+      expr: |
+        backend_cluster_version_state_timestamp_seconds{state="partial"}
+        - on(resource_id, subscription_id, version) group_left()
+        backend_cluster_version_state_timestamp_seconds{state="desired"}
+
+    # SLO-based recording rules for desired -> active (SLO: 99.99% complete in ≤1800s / 30 minutes)
+    # Track success (≤1800s) as 1, failure (>1800s) as 0
+    - record: backend_cluster_upgrade:desired_to_active_slo_success
+      expr: |
+        (backend_cluster_upgrade:desired_to_active_seconds <= 1800) * 1
+        or
+        (backend_cluster_upgrade:desired_to_active_seconds > 1800) * 0
+
+    # Sum of successes over time windows
+    - record: backend_cluster_upgrade:desired_to_active_success_sum_5m
+      expr: |
+        sum_over_time(backend_cluster_upgrade:desired_to_active_slo_success[5m])
+
+    - record: backend_cluster_upgrade:desired_to_active_success_sum_1h
+      expr: |
+        sum_over_time(backend_cluster_upgrade:desired_to_active_slo_success[1h])
+
+    - record: backend_cluster_upgrade:desired_to_active_success_sum_30m
+      expr: |
+        sum_over_time(backend_cluster_upgrade:desired_to_active_slo_success[30m])
+
+    - record: backend_cluster_upgrade:desired_to_active_success_sum_6h
+      expr: |
+        sum_over_time(backend_cluster_upgrade:desired_to_active_slo_success[6h])
+
+    # Count of total upgrade attempts over time windows
+    - record: backend_cluster_upgrade:desired_to_active_count_5m
+      expr: |
+        count_over_time(backend_cluster_upgrade:desired_to_active_seconds[5m])
+
+    - record: backend_cluster_upgrade:desired_to_active_count_1h
+      expr: |
+        count_over_time(backend_cluster_upgrade:desired_to_active_seconds[1h])
+
+    - record: backend_cluster_upgrade:desired_to_active_count_30m
+      expr: |
+        count_over_time(backend_cluster_upgrade:desired_to_active_seconds[30m])
+
+    - record: backend_cluster_upgrade:desired_to_active_count_6h
+      expr: |
+        count_over_time(backend_cluster_upgrade:desired_to_active_seconds[6h])
+
+    # Dashboard recording rules (partial and completed only; desired is pre-upgrade)
+
+    # Steady-state fleet at each z-stream (completed only, excluding clusters with an in-progress partial upgrade)
+    - record: backend_cluster_version:fleet_count_by_version
+      expr: |
+        count by (version) (
+          backend_cluster_version_info{state="completed"}
+          unless on(resource_id) backend_cluster_version_info{state="partial"}
+        )
+
+    - record: backend_cluster_version:total_clusters_steady_state
+      expr: |
+        count(
+          count by (resource_id) (
+            backend_cluster_version_info{state="completed"}
+            unless on(resource_id) backend_cluster_version_info{state="partial"}
+          )
+        )
+
+    - record: backend_cluster_version:fleet_percentage_by_version
+      expr: |
+        100 * backend_cluster_version:fleet_count_by_version
+        / on() group_left()
+        backend_cluster_version:total_clusters_steady_state
+
+    - record: backend_cluster_version:upgrading_count
+      expr: |
+        count(count by (resource_id) (backend_cluster_version_info{state="partial"}))
+
+    - record: backend_cluster_version:total_clusters
+      expr: |
+        count(count by (resource_id) (backend_cluster_version_info{state=~"partial|completed"}))
+
+    - record: backend_cluster_version:upgrading_fleet_percentage
+      expr: |
+        100 * backend_cluster_version:upgrading_count
+        / on() group_left()
+        backend_cluster_version:total_clusters
+
+    - record: backend_cluster_version:time_in_state_seconds
+      expr: |
+        time() - backend_cluster_version_state_timestamp_seconds{state=~"partial|completed"}
+
+    # Per-target-version upgrade success once partial is reached (1 = within 30m SLO, 0 = exceeded)
+    - record: backend_cluster_upgrade:success_rate_by_version
+      expr: |
+        100 * backend_cluster_upgrade:desired_to_active_slo_success
+
+    # Pending upgrades: desired selected but not yet partial (upgrade not started)
+
+    - record: backend_cluster_version:pending_upgrade_count_by_version
+      expr: |
+        count by (version) (
+          backend_cluster_version_info{state="desired"}
+          unless on(resource_id, subscription_id, version) backend_cluster_version_info{state="partial"}
+        )
+
+    - record: backend_cluster_version:pending_upgrade_count
+      expr: |
+        count(
+          count by (resource_id) (
+            backend_cluster_version_info{state="desired"}
+            unless on(resource_id, subscription_id, version) backend_cluster_version_info{state="partial"}
+          )
+        )
+
+    - record: backend_cluster_version:pending_upgrade_fleet_percentage
+      expr: |
+        100 * backend_cluster_version:pending_upgrade_count
+        / on() group_left()
+        count(count by (resource_id) (backend_cluster_version_info))
+
+    - record: backend_cluster_version:time_in_desired_seconds
+      expr: |
+        time() - backend_cluster_version_state_timestamp_seconds{state="desired"}
+
+    # Stuck upgrades: clusters in partial longer than threshold
+
+    - record: backend_cluster_version:stuck_upgrade_count_30m
+      expr: |
+        count(
+          backend_cluster_version_info{state="partial"}
+          and on(resource_id, subscription_id, version)
+          (backend_cluster_version:time_in_state_seconds{state="partial"} > 1800)
+        )
+
+    - record: backend_cluster_version:stuck_upgrade_count_60m
+      expr: |
+        count(
+          backend_cluster_version_info{state="partial"}
+          and on(resource_id, subscription_id, version)
+          (backend_cluster_version:time_in_state_seconds{state="partial"} > 3600)
+        )
+
+    - record: backend_cluster_version:stuck_upgrade_percentage_30m
+      expr: |
+        100 * backend_cluster_version:stuck_upgrade_count_30m
+        / on() group_left()
+        backend_cluster_version:upgrading_count
+
+    - record: backend_cluster_version:stuck_upgrade_percentage_60m
+      expr: |
+        100 * backend_cluster_version:stuck_upgrade_count_60m
+        / on() group_left()
+        backend_cluster_version:upgrading_count

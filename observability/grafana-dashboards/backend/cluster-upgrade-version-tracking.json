@@ -1,0 +1,416 @@
+{
+  "description": "Control plane z-stream upgrade fleet visibility from backend_cluster_version_info metrics.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["pending"],
+      "targetBlank": true,
+      "title": "Pending upgrades",
+      "type": "dashboards"
+    }
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Z-stream fleet distribution",
+      "type": "row"
+    },
+    {
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 1 },
+      "id": 101,
+      "options": {
+        "content": "### Version states\n\n| State | Meaning | Dashboard |\n|---|---|---|\n| `desired` | Target z-stream selected, **upgrade not started** | [Pending (not started)](d/backend-cluster-upgrade-pending) |\n| `partial` | Upgrade in progress | This dashboard |\n| `completed` | Upgrade finished | This dashboard (fleet distribution) |",
+        "mode": "markdown"
+      },
+      "title": "Note",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Cluster count at each z-stream level (steady state, not mid-upgrade). Highest-count version per minor is the fleet's effective latest adoption for that minor.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 16, "x": 8, "y": 1 },
+      "id": 102,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": true, "displayName": "Value" }]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "sort_desc(max without(prometheus_replica) (backend_cluster_version:fleet_count_by_version{cluster=\"$cluster\"}))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "refId": "A"
+        }
+      ],
+      "title": "Fleet count by z-stream (latest adopted levels)",
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "Clusters", "version": "Z-stream version" } } }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Percentage of steady-state fleet at each z-stream version.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 8, "x": 0, "y": 6 },
+      "id": 103,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"] },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:fleet_percentage_by_version{cluster=\"$cluster\"})",
+          "legendFormat": "{{version}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Fleet % at each z-stream",
+      "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 200,
+      "title": "Upgrade progress and success",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Clusters with state=partial (upgrade in progress). desired (not started) is excluded.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 15 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 17 },
+      "id": 201,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:upgrading_fleet_percentage{cluster=\"$cluster\"})",
+          "legendFormat": "Upgrading",
+          "refId": "A"
+        }
+      ],
+      "title": "Fleet % mid-upgrade",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Share of upgrades that reached partial within the 30-minute SLO, per target z-stream. Only upgrades that started (partial) are included; desired-only clusters are excluded.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 18, "x": 6, "y": 17 },
+      "id": 202,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_upgrade:success_rate_by_version{cluster=\"$cluster\"})",
+          "legendFormat": "{{version}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Upgrade success % by target z-stream (30m SLO)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Rolling success rate over the dashboard time range.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 27 },
+      "id": 203,
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "100 * sum by (version) (count_over_time(max without(prometheus_replica) (backend_cluster_upgrade:desired_to_active_slo_success{cluster=\"$cluster\"})[$__range:])) / sum by (version) (count_over_time((max without(prometheus_replica) (backend_cluster_upgrade:desired_to_active_seconds{cluster=\"$cluster\"}) > 0)[$__range:]))",
+          "legendFormat": "{{version}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Upgrade success % by z-stream over selected range",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 },
+      "id": 300,
+      "title": "Stuck upgrades",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Clusters in Partial state longer than the stuck threshold.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 36 },
+      "id": 301,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "count(max without(prometheus_replica) (backend_cluster_version_info{cluster=\"$cluster\", state=\"partial\"}) and on(resource_id, subscription_id, version) (max without(prometheus_replica) (backend_cluster_version:time_in_state_seconds{cluster=\"$cluster\", state=\"partial\"}) > $stuck_threshold_minutes * 60))",
+          "legendFormat": "Stuck",
+          "refId": "A"
+        }
+      ],
+      "title": "Stuck upgrade count",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Stuck upgrades as a percentage of all clusters currently upgrading.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 25 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 36 },
+      "id": 302,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "100 * count(max without(prometheus_replica) (backend_cluster_version_info{cluster=\"$cluster\", state=\"partial\"}) and on(resource_id, subscription_id, version) (max without(prometheus_replica) (backend_cluster_version:time_in_state_seconds{cluster=\"$cluster\", state=\"partial\"}) > $stuck_threshold_minutes * 60)) / max without(prometheus_replica) (backend_cluster_version:upgrading_count{cluster=\"$cluster\"})",
+          "legendFormat": "Stuck %",
+          "refId": "A"
+        }
+      ],
+      "title": "Stuck % of upgrading fleet",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "description": "Clusters in Partial state longer than the stuck threshold.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 36 },
+      "id": 303,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:time_in_state_seconds{cluster=\"$cluster\", state=\"partial\"}) > $stuck_threshold_minutes * 60",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Stuck upgrades (>${stuck_threshold_minutes}m in Partial)",
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "state": true }, "renameByName": { "Value": "Seconds in Partial", "resource_id": "Cluster", "subscription_id": "Subscription", "version": "Target z-stream" } } }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 42 },
+      "id": 304,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "editorMode": "code",
+          "expr": "max without(prometheus_replica) (backend_cluster_version:upgrading_fleet_percentage{cluster=\"$cluster\"})",
+          "legendFormat": "Mid-upgrade %",
+          "refId": "A"
+        }
+      ],
+      "title": "Fleet % mid-upgrade over time",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["backend", "upgrade", "version"],
+  "templating": {
+    "list": [
+      {
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "^Managed_Prometheus_services-.*$",
+        "type": "datasource"
+      },
+      {
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(up,cluster)",
+        "hide": 0,
+        "includeAll": false,
+        "label": "cluster",
+        "multi": false,
+        "name": "cluster",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(up,cluster)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "^.*-svc-\\d+$",
+        "type": "query"
+      },
+      {
+        "current": { "selected": true, "text": "30", "value": "30" },
+        "hide": 0,
+        "label": "Stuck threshold (minutes)",
+        "name": "stuck_threshold_minutes",
+        "options": [
+          { "selected": false, "text": "15", "value": "15" },
+          { "selected": true, "text": "30", "value": "30" },
+          { "selected": false, "text": "60", "value": "60" },
+          { "selected": false, "text": "120", "value": "120" }
+        ],
+        "query": "15,30,60,120",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Cluster Upgrade Version Tracking",
+  "uid": "backend-cluster-upgrade-versions",
+  "version": 1
+}
