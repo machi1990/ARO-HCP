@@ -165,6 +165,27 @@ func TestSelectControlPlaneVersion_Install(t *testing.T) {
 			},
 			wantVersion: "4.19.15",
 		},
+		{
+			// doesNextMinorExist uses ChannelExists rather than probing for a
+			// plain .0, so a next-minor channel that only has EC builds still
+			// counts as existing. If it incorrectly returned false, the
+			// non-gateway latest (4.20.12) would be selected instead.
+			name:             "next minor exists with only ec builds — selects gateway not latest",
+			channelStability: "candidate",
+			desiredYVersion:  "4.20.0",
+			channels: map[string]*testserver.Graph{
+				"candidate-4.20": testserver.NewGraph().
+					Edges("4.20.0", "4.20.5", "4.20.10", "4.20.12").
+					Edges("4.20.5", "4.20.10", "4.20.12").
+					Edges("4.20.10", "4.20.12"),
+				"candidate-4.21": testserver.NewGraph().
+					Versions("4.20.10", "4.21.0-ec.0", "4.21.0-ec.1").
+					Edges("4.20.10", "4.21.0-ec.1").
+					Edges("4.21.0-ec.0", "4.21.0-ec.1"),
+				// No plain 4.21.0 — channel is EC-only. 4.20.12 is NOT a gateway.
+			},
+			wantVersion: "4.20.10",
+		},
 	}
 
 	for _, tt := range tests {
@@ -467,6 +488,29 @@ func TestSelectControlPlaneVersion_Upgrade(t *testing.T) {
 			},
 			hostedCluster: hostedClusterWithHistory("4.19.10"),
 			wantVersion:   "4.19.15",
+		},
+		{
+			// Candidate/nightly channels often publish pre-release builds
+			// (e.g. 4.20.0-ec.4, 4.21.0-rc.1) with no plain .0 node. Probing
+			// GetUpdates from .0 then returns VersionNotFound, and
+			// isNextMinorReachableFromCurrentMinor must fall back to checking
+			// the upgrade candidates for gateway edges into the next minor.
+			name:             "candidate channel — next minor exists with only pre-release versions; .0 missing falls back to candidates",
+			channelStability: "candidate",
+			desiredYVersion:  "4.20.0",
+			channels: map[string]*testserver.Graph{
+				"candidate-4.20": testserver.NewGraph().
+					Edges("4.20.0-ec.1", "4.20.0-ec.4", "4.20.0-rc.1").
+					Edges("4.20.0-ec.4", "4.20.0-rc.1"),
+				// No plain 4.20.0 — GetUpdates(candidate-4.20, 4.20.0) → VersionNotFound
+				"candidate-4.21": testserver.NewGraph().
+					Versions("4.20.0-rc.1", "4.21.0-ec.0", "4.21.0-ec.1").
+					Edges("4.20.0-rc.1", "4.21.0-ec.1").
+					Edges("4.21.0-ec.0", "4.21.0-ec.1"),
+				// Next minor exists but only as ec builds; 4.20.0-rc.1 is the gateway
+			},
+			hostedCluster: hostedClusterWithHistory("4.20.0-ec.1"),
+			wantVersion:   "4.20.0-rc.1",
 		},
 		{
 			name:             "transitive — both y+1 targets are gateways but only one has a chain through y+2",
